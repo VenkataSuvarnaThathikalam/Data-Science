@@ -1,230 +1,217 @@
 import pandas as pd
-import numpy as np
 
 
 def calc_kpis(df: pd.DataFrame) -> dict:
-    total_applications = len(df)
-    total_defaults = (df["TARGET"] == 1).sum()
-    total_non_defaults = (df["TARGET"] == 0).sum()
-    default_rate = (total_defaults / total_applications * 100) if total_applications > 0 else 0
-    
-    total_credit = df["AMT_CREDIT"].sum()
-    avg_credit = df["AMT_CREDIT"].mean()
-    avg_income = df["AMT_INCOME_TOTAL"].mean()
-    avg_annuity = df["AMT_ANNUITY"].mean()
-    
+    total_sales = df["Sales"].sum()
+    total_profit = df["Profit"].sum()
+    total_orders = df["Order ID"].nunique()
+    total_customers = df["Customer ID"].nunique()
+    total_quantity = df["Quantity"].sum()
+    profit_margin = total_profit / total_sales * 100 if total_sales else 0.0
+    avg_order_value = total_sales / total_orders if total_orders else 0.0
     return {
-        "total_applications": total_applications,
-        "total_defaults": total_defaults,
-        "total_non_defaults": total_non_defaults,
-        "default_rate": default_rate,
-        "total_credit": total_credit,
-        "avg_credit": avg_credit,
-        "avg_income": avg_income,
-        "avg_annuity": avg_annuity,
+        "total_sales": total_sales,
+        "total_profit": total_profit,
+        "total_orders": total_orders,
+        "total_customers": total_customers,
+        "total_quantity": total_quantity,
+        "profit_margin": profit_margin,
+        "avg_order_value": avg_order_value,
     }
 
 
-def get_default_summary(df: pd.DataFrame) -> dict:
-    total_apps = len(df)
-    default_count = (df["TARGET"] == 1).sum()
-    default_rate = (default_count / total_apps * 100) if total_apps > 0 else 0
-    
-    most_common_income = df["NAME_INCOME_TYPE"].mode()[0] if not df["NAME_INCOME_TYPE"].mode().empty else "N/A"
-    most_common_education = df["NAME_EDUCATION_TYPE"].mode()[0] if not df["NAME_EDUCATION_TYPE"].mode().empty else "N/A"
-    
-    # Get highest risk segment by default rate
-    segment_default_rate = df.groupby("NAME_INCOME_TYPE")["TARGET"].apply(lambda x: (x == 1).sum() / len(x) * 100)
-    highest_risk_segment = segment_default_rate.idxmax() if not segment_default_rate.empty else "N/A"
-    
+def top_bottom_summary(df: pd.DataFrame) -> dict:
     return {
-        "default_rate": default_rate,
-        "most_common_income": most_common_income,
-        "most_common_education": most_common_education,
-        "highest_risk_segment": highest_risk_segment,
+        "best_region_sales": df.groupby("Region")["Sales"].sum().idxmax() if not df.empty else None,
+        "best_category_sales": df.groupby("Category")["Sales"].sum().idxmax() if not df.empty else None,
+        "highest_sales_month": df.groupby(df["Order Date"].dt.to_period("M"))["Sales"].sum().idxmax().strftime("%Y-%m") if not df.empty else None,
+        "highest_profit_month": df.groupby(df["Order Date"].dt.to_period("M"))["Profit"].sum().idxmax().strftime("%Y-%m") if not df.empty else None,
     }
-
-
-def get_demographic_kpis(df: pd.DataFrame) -> pd.DataFrame:
-    """Get KPIs by gender"""
-    return df.groupby("CODE_GENDER").agg({
-        "SK_ID_CURR": "count",
-        "TARGET": lambda x: (x == 1).sum(),
-        "AMT_INCOME_TOTAL": "mean",
-        "AMT_CREDIT": "mean",
-    }).rename(columns={
-        "SK_ID_CURR": "Applications",
-        "TARGET": "Defaults",
-        "AMT_INCOME_TOTAL": "Avg Income",
-        "AMT_CREDIT": "Avg Credit",
-    }).reset_index()
-
-
-def get_income_type_kpis(df: pd.DataFrame) -> pd.DataFrame:
-    """Get KPIs by income type"""
-    result = df.groupby("NAME_INCOME_TYPE").agg({
-        "SK_ID_CURR": "count",
-        "TARGET": lambda x: (x == 1).sum(),
-        "AMT_INCOME_TOTAL": "mean",
-        "AMT_CREDIT": "mean",
-    }).rename(columns={
-        "SK_ID_CURR": "Applications",
-        "TARGET": "Defaults",
-        "AMT_INCOME_TOTAL": "Avg Income",
-        "AMT_CREDIT": "Avg Credit",
-    }).reset_index()
-    result["Default_Rate_%"] = (result["Defaults"] / result["Applications"] * 100).round(2)
-    return result.sort_values("Applications", ascending=False)
-
-
-def get_education_kpis(df: pd.DataFrame) -> pd.DataFrame:
-    """Get KPIs by education type"""
-    result = df.groupby("NAME_EDUCATION_TYPE").agg({
-        "SK_ID_CURR": "count",
-        "TARGET": lambda x: (x == 1).sum(),
-        "AMT_INCOME_TOTAL": "mean",
-        "AMT_CREDIT": "mean",
-    }).rename(columns={
-        "SK_ID_CURR": "Applications",
-        "TARGET": "Defaults",
-        "AMT_INCOME_TOTAL": "Avg Income",
-        "AMT_CREDIT": "Avg Credit",
-    }).reset_index()
-    result["Default_Rate_%"] = (result["Defaults"] / result["Applications"] * 100).round(2)
-    return result.sort_values("Applications", ascending=False)
-
-
-def get_contract_type_kpis(df: pd.DataFrame) -> pd.DataFrame:
-    """Get KPIs by contract type"""
-    result = df.groupby("NAME_CONTRACT_TYPE").agg({
-        "SK_ID_CURR": "count",
-        "TARGET": lambda x: (x == 1).sum(),
-        "AMT_CREDIT": "mean",
-        "AMT_INCOME_TOTAL": "mean",
-    }).rename(columns={
-        "SK_ID_CURR": "Applications",
-        "TARGET": "Defaults",
-        "AMT_CREDIT": "Avg Credit",
-        "AMT_INCOME_TOTAL": "Avg Income",
-    }).reset_index()
-    result["Default_Rate_%"] = (result["Defaults"] / result["Applications"] * 100).round(2)
-    return result
-
-
-def get_housing_type_kpis(df: pd.DataFrame) -> pd.DataFrame:
-    """Get KPIs by housing type"""
-    result = df.groupby("NAME_HOUSING_TYPE").agg({
-        "SK_ID_CURR": "count",
-        "TARGET": lambda x: (x == 1).sum(),
-        "AMT_INCOME_TOTAL": "mean",
-        "AMT_CREDIT": "mean",
-    }).rename(columns={
-        "SK_ID_CURR": "Applications",
-        "TARGET": "Defaults",
-        "AMT_INCOME_TOTAL": "Avg Income",
-        "AMT_CREDIT": "Avg Credit",
-    }).reset_index()
-    result["Default_Rate_%"] = (result["Defaults"] / result["Applications"] * 100).round(2)
-    return result.sort_values("Applications", ascending=False)
-
-
-def get_occupation_kpis(df: pd.DataFrame, top_n: int = 15) -> pd.DataFrame:
-    """Get KPIs by occupation"""
-    result = df.groupby("OCCUPATION_TYPE").agg({
-        "SK_ID_CURR": "count",
-        "TARGET": lambda x: (x == 1).sum(),
-        "AMT_INCOME_TOTAL": "mean",
-    }).rename(columns={
-        "SK_ID_CURR": "Applications",
-        "TARGET": "Defaults",
-        "AMT_INCOME_TOTAL": "Avg Income",
-    }).reset_index()
-    result["Default_Rate_%"] = (result["Defaults"] / result["Applications"] * 100).round(2)
-    result = result.sort_values("Applications", ascending=False)
-    if top_n:
-        result = result.head(top_n)
-    return result
-
-
-def get_organization_type_kpis(df: pd.DataFrame, top_n: int = 15) -> pd.DataFrame:
-    """Get KPIs by organization type"""
-    result = df.groupby("ORGANIZATION_TYPE").agg({
-        "SK_ID_CURR": "count",
-        "TARGET": lambda x: (x == 1).sum(),
-        "AMT_INCOME_TOTAL": "mean",
-        "AMT_CREDIT": "mean",
-    }).rename(columns={
-        "SK_ID_CURR": "Applications",
-        "TARGET": "Defaults",
-        "AMT_INCOME_TOTAL": "Avg Income",
-        "AMT_CREDIT": "Avg Credit",
-    }).reset_index()
-    result["Default_Rate_%"] = (result["Defaults"] / result["Applications"] * 100).round(2)
-    result = result.sort_values("Applications", ascending=False)
-    if top_n:
-        result = result.head(top_n)
-    return result
-
-
-def get_age_group_kpis(df: pd.DataFrame) -> pd.DataFrame:
-    """Get KPIs by age group"""
-    if "AGE" not in df.columns:
-        return pd.DataFrame()
-    
-    df["Age_Group"] = pd.cut(df["AGE"], bins=[0, 25, 35, 45, 55, 65, 100], 
-                             labels=["<25", "25-35", "35-45", "45-55", "55-65", "65+"])
-    
-    result = df.groupby("Age_Group", observed=True).agg({
-        "SK_ID_CURR": "count",
-        "TARGET": lambda x: (x == 1).sum(),
-        "AMT_INCOME_TOTAL": "mean",
-        "AMT_CREDIT": "mean",
-    }).rename(columns={
-        "SK_ID_CURR": "Applications",
-        "TARGET": "Defaults",
-        "AMT_INCOME_TOTAL": "Avg Income",
-        "AMT_CREDIT": "Avg Credit",
-    }).reset_index()
-    result["Default_Rate_%"] = (result["Defaults"] / result["Applications"] * 100).round(2)
-    return result
-
-
-def get_credit_score_kpis(df: pd.DataFrame) -> pd.DataFrame:
-    """Get statistics for external credit scores"""
-    external_sources = [col for col in ["EXT_SOURCE_1", "EXT_SOURCE_2", "EXT_SOURCE_3"] if col in df.columns]
-    
-    if not external_sources:
-        return pd.DataFrame()
-    
-    result = {
-        "Metric": ["Mean", "Median", "Min", "Max", "Std Dev"],
-    }
-    
-    for source in external_sources:
-        data = df[source].dropna()
-        result[source] = [
-            data.mean(),
-            data.median(),
-            data.min(),
-            data.max(),
-            data.std(),
-        ]
-    
-    return pd.DataFrame(result)
 
 
 def get_regional_kpis(df: pd.DataFrame) -> pd.DataFrame:
     """Get KPIs by region"""
-    result = df.groupby("REGION_RATING_CLIENT").agg({
-        "SK_ID_CURR": "count",
-        "TARGET": lambda x: (x == 1).sum(),
-        "AMT_INCOME_TOTAL": "mean",
-        "REGION_POPULATION_RELATIVE": "mean",
+    return df.groupby("Region").agg({
+        "Sales": "sum",
+        "Profit": "sum",
+        "Order ID": "nunique",
+        "Customer ID": "nunique",
+        "Quantity": "sum",
     }).rename(columns={
-        "SK_ID_CURR": "Applications",
-        "TARGET": "Defaults",
-        "AMT_INCOME_TOTAL": "Avg Income",
-        "REGION_POPULATION_RELATIVE": "Avg Pop Relative",
+        "Order ID": "Orders",
+        "Customer ID": "Customers",
     }).reset_index()
-    result["Default_Rate_%"] = (result["Defaults"] / result["Applications"] * 100).round(2)
-    return result.sort_values("Applications", ascending=False)
+
+
+def get_state_kpis(df: pd.DataFrame) -> pd.DataFrame:
+    """Get KPIs by state"""
+    return df.groupby("State").agg({
+        "Sales": "sum",
+        "Profit": "sum",
+        "Order ID": "nunique",
+        "Customer ID": "nunique",
+        "Quantity": "sum",
+    }).rename(columns={
+        "Order ID": "Orders",
+        "Customer ID": "Customers",
+    }).reset_index().sort_values("Sales", ascending=False)
+
+
+def get_city_kpis(df: pd.DataFrame) -> pd.DataFrame:
+    """Get KPIs by city"""
+    return df.groupby(["City", "State"]).agg({
+        "Sales": "sum",
+        "Profit": "sum",
+        "Order ID": "nunique",
+        "Customer ID": "nunique",
+        "Quantity": "sum",
+    }).rename(columns={
+        "Order ID": "Orders",
+        "Customer ID": "Customers",
+    }).reset_index().sort_values("Sales", ascending=False)
+
+
+def get_category_kpis(df: pd.DataFrame) -> pd.DataFrame:
+    """Get KPIs by category"""
+    result = df.groupby("Category").agg({
+        "Sales": "sum",
+        "Profit": "sum",
+        "Quantity": "sum",
+        "Order ID": "nunique",
+    }).rename(columns={
+        "Order ID": "Orders",
+    }).reset_index()
+    result["Profit Margin %"] = (result["Profit"] / result["Sales"] * 100).round(2)
+    return result.sort_values("Sales", ascending=False)
+
+
+def get_subcategory_kpis(df: pd.DataFrame) -> pd.DataFrame:
+    """Get KPIs by sub-category"""
+    result = df.groupby("Sub-Category").agg({
+        "Sales": "sum",
+        "Profit": "sum",
+        "Quantity": "sum",
+        "Discount": "mean",
+    }).rename(columns={
+        "Discount": "Avg Discount",
+    }).reset_index()
+    result["Profit Margin %"] = (result["Profit"] / result["Sales"] * 100).round(2)
+    return result.sort_values("Sales", ascending=False)
+
+
+def get_product_kpis(df: pd.DataFrame, top_n: int = None) -> pd.DataFrame:
+    """Get KPIs by product"""
+    result = df.groupby(["Product Name", "Category", "Sub-Category"]).agg({
+        "Sales": "sum",
+        "Profit": "sum",
+        "Quantity": "sum",
+        "Discount": "mean",
+    }).rename(columns={
+        "Discount": "Avg Discount",
+    }).reset_index()
+    result["Profit Margin %"] = (result["Profit"] / result["Sales"] * 100).round(2)
+    result = result.sort_values("Sales", ascending=False)
+    if top_n:
+        result = result.head(top_n)
+    return result
+
+
+def get_customer_kpis(df: pd.DataFrame, top_n: int = None) -> pd.DataFrame:
+    """Get KPIs by customer"""
+    result = df.groupby(["Customer Name", "Customer ID", "Segment"]).agg({
+        "Sales": "sum",
+        "Profit": "sum",
+        "Quantity": "sum",
+        "Order ID": "nunique",
+    }).rename(columns={
+        "Order ID": "Orders",
+    }).reset_index()
+    result = result.sort_values("Sales", ascending=False)
+    if top_n:
+        result = result.head(top_n)
+    return result
+
+
+def get_segment_kpis(df: pd.DataFrame) -> pd.DataFrame:
+    """Get KPIs by customer segment"""
+    result = df.groupby("Segment").agg({
+        "Sales": "sum",
+        "Profit": "sum",
+        "Quantity": "sum",
+        "Order ID": "nunique",
+        "Customer ID": "nunique",
+        "Discount": "mean",
+    }).rename(columns={
+        "Order ID": "Orders",
+        "Customer ID": "Customers",
+        "Discount": "Avg Discount",
+    }).reset_index()
+    result["Profit Margin %"] = (result["Profit"] / result["Sales"] * 100).round(2)
+    return result
+
+
+def get_order_kpis(df: pd.DataFrame) -> pd.DataFrame:
+    """Get KPIs by order"""
+    order_df = df.groupby("Order ID").agg({
+        "Order Date": "first",
+        "Customer Name": "first",
+        "Sales": "sum",
+        "Profit": "sum",
+        "Quantity": "sum",
+    }).reset_index()
+    order_df["Avg Profit per Order"] = order_df["Profit"] / order_df.groupby("Order ID").size()
+    return order_df.sort_values("Order Date", ascending=False)
+
+
+def get_shipping_kpis(df: pd.DataFrame) -> pd.DataFrame:
+    """Get KPIs by ship mode"""
+    result = df.groupby("Ship Mode").agg({
+        "Order ID": "nunique",
+        "Sales": "sum",
+        "Profit": "sum",
+        "Shipping Days": "mean",
+    }).rename(columns={
+        "Order ID": "Shipments",
+        "Shipping Days": "Avg Shipping Days",
+    }).reset_index()
+    return result
+
+
+def get_loss_analysis(df: pd.DataFrame) -> pd.DataFrame:
+    """Get loss-making records"""
+    loss_df = df[df["Profit"] < 0].copy()
+    return loss_df.sort_values("Profit", ascending=True)
+
+
+def get_discount_analysis(df: pd.DataFrame) -> pd.DataFrame:
+    """Analyze discount impact"""
+    df_copy = df.copy()
+    df_copy["Discount_Range"] = pd.cut(
+        df_copy["Discount"],
+        bins=[-0.01, 0, 0.1, 0.2, 0.3, 0.5, 1.0],
+        labels=["0%", "1-10%", "11-20%", "21-30%", "31-50%", "51%+"],
+    )
+    return df_copy.groupby("Discount_Range", observed=True).agg({
+        "Sales": "sum",
+        "Profit": "sum",
+        "Order ID": "nunique",
+    }).rename(columns={
+        "Order ID": "Orders",
+    }).reset_index()
+
+
+def get_growth_metrics(df: pd.DataFrame) -> pd.DataFrame:
+    """Calculate month-over-month growth metrics"""
+    df_copy = df.copy()
+    df_copy["YearMonth"] = df_copy["Order Date"].dt.to_period("M")
+    monthly = df_copy.groupby("YearMonth").agg({
+        "Sales": "sum",
+        "Profit": "sum",
+        "Order ID": "nunique",
+    }).rename(columns={
+        "Order ID": "Orders",
+    }).reset_index()
+    
+    monthly["Sales_Growth_%"] = monthly["Sales"].pct_change() * 100
+    monthly["Profit_Growth_%"] = monthly["Profit"].pct_change() * 100
+    return monthly

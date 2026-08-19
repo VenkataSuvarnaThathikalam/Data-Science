@@ -4,15 +4,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 
-def line_chart(df: pd.DataFrame, date_col: str, value_col: str, title: str, freq: str = "M"):
-    if date_col not in df.columns or value_col not in df.columns:
-        return None
+def line_chart(df: pd.DataFrame, date_col: str, value_col: str, title: str, freq: str = "ME"):
     data = df.groupby(pd.Grouper(key=date_col, freq=freq))[value_col].sum().reset_index()
     fig = px.line(data, x=date_col, y=value_col, title=title, markers=True)
     return fig
 
 
-def multi_line_chart(df: pd.DataFrame, date_col: str, value_cols: list, title: str, freq: str = "M"):
+def multi_line_chart(df: pd.DataFrame, date_col: str, value_cols: list, title: str, freq: str = "ME"):
     """Plot multiple lines on same chart"""
     data = df.groupby(pd.Grouper(key=date_col, freq=freq))[value_cols].sum().reset_index()
     fig = px.line(data, x=date_col, y=value_cols, title=title, markers=True)
@@ -21,24 +19,17 @@ def multi_line_chart(df: pd.DataFrame, date_col: str, value_cols: list, title: s
 
 def bar_chart(df: pd.DataFrame, group_col: str, value_col: str | None, title: str, top_n: int = None, aggfunc: str = "sum"):
     if value_col is None:
-        data = df.groupby(group_col).size().reset_index(name="count")
-        sort_col = "count"
+        data = df.groupby(group_col).size().reset_index(name="value")
     elif aggfunc == "sum":
         data = df.groupby(group_col)[value_col].sum().reset_index(name=value_col)
-        sort_col = value_col
     elif aggfunc == "count":
         data = df.groupby(group_col)[value_col].count().reset_index(name=value_col)
-        sort_col = value_col
-    elif aggfunc == "mean":
-        data = df.groupby(group_col)[value_col].mean().reset_index(name=value_col)
-        sort_col = value_col
     elif aggfunc == "nunique":
         data = df.groupby(group_col)[value_col].nunique().reset_index(name=value_col)
-        sort_col = value_col
     else:
         data = df.groupby(group_col)[value_col].sum().reset_index(name=value_col)
-        sort_col = value_col
 
+    sort_col = "value" if value_col is None else value_col
     data = data.sort_values(sort_col, ascending=False)
     if top_n:
         data = data.head(top_n)
@@ -57,13 +48,12 @@ def horizontal_bar_chart(df: pd.DataFrame, group_col: str, value_col: str, title
 
 
 def scatter_chart(df: pd.DataFrame, x_col: str, y_col: str, color_col: str | None, title: str):
-    fig = px.scatter(df, x=x_col, y=y_col, color=color_col, title=title, hover_data=[x_col, y_col])
+    fig = px.scatter(df, x=x_col, y=y_col, color=color_col, title=title, hover_data=df.columns)
     return fig
 
 
-def histogram(df: pd.DataFrame, column: str, title: str, nbins: int = 30):
-    df_clean = df[[column]].dropna()
-    fig = px.histogram(df_clean, x=column, nbins=nbins, title=title)
+def histogram(df: pd.DataFrame, column: str, title: str):
+    fig = px.histogram(df, x=column, nbins=30, title=title)
     return fig
 
 
@@ -97,14 +87,4 @@ def waterfall_chart(df: pd.DataFrame, category_col: str, value_col: str, title: 
         text=data[value_col],
     ))
     fig.update_layout(title=title)
-    return fig
-
-
-def default_rate_chart(df: pd.DataFrame, segment_col: str, title: str):
-    """Create chart showing default rate by segment"""
-    data = df.groupby(segment_col)["TARGET"].agg(["sum", "count"]).reset_index()
-    data.columns = [segment_col, "Defaults", "Total"]
-    data["Default_Rate"] = (data["Defaults"] / data["Total"] * 100).round(2)
-    data = data.sort_values("Default_Rate", ascending=False)
-    fig = px.bar(data, x=segment_col, y="Default_Rate", title=title, text="Default_Rate")
     return fig
